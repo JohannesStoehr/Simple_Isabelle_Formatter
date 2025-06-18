@@ -27,7 +27,7 @@ public class Main {
     private static final String[] PROOVERS = {"verit", "full_types"};
     private static final String PROOVERS_REGEX = "(?!" + String.join("\\b)(?!", PROOVERS) + "\\b)";
     private static final String[] LINE_ENDERS = {"of", "where", "\\|"};
-    private static final String[] LINE_STARTERS = { "then", "else" };
+    private static final String[] LINE_STARTERS = {"then", "else"};
     private static final String[] OPENING_BRACKETS = {"\\(", "\\{", "\\\\<lbrakk>"};
     private static final String[] CLOSING_BRACKETS = {"\\)", "\\}", "\\\\<rbrakk>"};
 
@@ -79,22 +79,26 @@ public class Main {
 
             line = normalizeSpaces(line, insideQuotes);
             line = moveLineBreakers(line, cleanLines, lines, i);
-            line = breakLine(line, lines, i+1);
+            line = breakLine(line, lines, i + 1);
             line = removeMultipleProofHelpers(line, cleanLines);
             line = removeUnnecessaryBrackets(line);
-            line = addAnds(line, lines, i+1, cleanLines);
-            line = breakLongLines(line, lines, i+1);
+            line = addAnds(line, lines, i + 1, cleanLines);
+            line = breakLongLines(line, lines, i + 1);
             line = addApplyAutoBonk(line);
 
             if (line.isBlank()) {
                 continue;
             }
 
-            cleanLines.add(line);
-
             long numberOfQuotesInLine = line.chars().filter(ch -> ch == '"').count();
             if (numberOfQuotesInLine % 2 == 1) {
                 insideQuotes = !insideQuotes;
+            }
+
+            if (shouldUniteWithLastLine(line, cleanLines)) {
+                cleanLines.set(cleanLines.size() - 1, cleanLines.getLast() + " " + line);
+            } else {
+                cleanLines.add(line);
             }
         }
 
@@ -185,7 +189,7 @@ public class Main {
 
         if (parts.length == 1) {
             return line;
-        } else  if (parts[0].isEmpty()) {
+        } else if (parts[0].isEmpty()) {
             line = "\"";
         } else if (insideQuotes) {
             line = parts[0].trim() + "\"";
@@ -299,7 +303,7 @@ public class Main {
             return parts[0].trim();
         }
 
-        for (String proofHelper: PROOF_HELPERS) {
+        for (String proofHelper : PROOF_HELPERS) {
             if (line.contains(proofHelper) && !line.startsWith(proofHelper) && !line.contains("proof")) {
                 String[] parts = line.split(proofHelper, 2);
                 lines.add(indexToAdd, proofHelper + " " + parts[1].trim());
@@ -363,7 +367,7 @@ public class Main {
                 return line;
             }
 
-            for(int i = 1; i < parts.length; i++) {
+            for (int i = 1; i < parts.length; i++) {
                 String nextLine = "\"" + parts[i].trim() + (i < parts.length - 1 ? "\" and" : "");
                 lines.add(indexToAdd + i - 1, nextLine);
             }
@@ -381,7 +385,7 @@ public class Main {
             if (line.startsWith(proofHelper) && line.length() > MAX_LINE_LENGTH) {
                 String[] parts = line.split(" ");
                 StringBuilder newLine = new StringBuilder(proofHelper);
-                for(int i = 1; i < parts.length; i++) {
+                for (int i = 1; i < parts.length; i++) {
                     if (newLine.length() + parts[i].length() > MAX_LINE_LENGTH) {
                         lines.add(indexToAdd, proofHelper + " " + Arrays.stream(parts, i, parts.length).collect(Collectors.joining(" ")).trim());
                         return newLine.toString();
@@ -411,6 +415,15 @@ public class Main {
         return line;
     }
 
+    private static boolean shouldUniteWithLastLine(String line, List<String> cleanLines) {
+        if (cleanLines.isEmpty()) {
+            return false;
+        }
+
+        String lastLine = cleanLines.getLast();
+        return line.contains("proof") && lastLine.contains("show ");
+    }
+
     private static void indentLines(List<String> cleanLines) {
         int currentIndentionLevel = 0;
         boolean insideQuotes = false;
@@ -432,40 +445,41 @@ public class Main {
     private static int[] handleIndentionLevel(String line, int currentIndentionLevel, boolean insideQuotes) {
         int[] indentationLevels;
 
-        if (Stream.concat(Arrays.stream(LEMMA_STARTERS), Stream.concat(Arrays.stream(TEXT_STARTERS), Arrays.stream(OTHER_STARTERS))).anyMatch(line::startsWith) ) {
+        if (Stream.concat(Arrays.stream(LEMMA_STARTERS), Stream.concat(Arrays.stream(TEXT_STARTERS), Arrays.stream(OTHER_STARTERS))).anyMatch(line::startsWith)) {
             indentationLevels = new int[]{0, 0};
         } else if (Arrays.stream(COMMENT_STARTERS).anyMatch(line::startsWith)) {
-            indentationLevels = new int[] {currentIndentionLevel, currentIndentionLevel};
+            indentationLevels = new int[]{currentIndentionLevel, currentIndentionLevel};
         } else if (line.isBlank()) {
             indentationLevels = new int[]{0, currentIndentionLevel};
         } else if (line.startsWith("assumes") || line.startsWith("fixes") || line.startsWith("shows")) {
             if (line.endsWith("and")) {
-                indentationLevels = new int[] {1, 2};
+                indentationLevels = new int[]{1, 2};
             } else {
-                indentationLevels = new int[] {1, 1};
+                indentationLevels = new int[]{1, 1};
             }
         } else if (line.contains("proof")) {
             if (line.contains("show")) {
-                indentationLevels =  new int[] {currentIndentionLevel, currentIndentionLevel + 1};
+                indentationLevels = new int[]{currentIndentionLevel, currentIndentionLevel + 1};
             } else {
-                indentationLevels =  new int[] {0, 1};
+                indentationLevels = new int[]{0, 1};
             }
+        } else if (line.startsWith("imports")) {
+            indentationLevels = new int[]{1, 0};
         } else if (line.equals("qed")) {
-            indentationLevels =  new int[] {currentIndentionLevel - 1, currentIndentionLevel - 1};
+            indentationLevels = new int[]{currentIndentionLevel - 1, currentIndentionLevel - 1};
         } else if (line.startsWith("by") || line.startsWith("apply") || Arrays.stream(PROOF_HELPERS).anyMatch(line::startsWith)) {
-            indentationLevels =  new int[] {currentIndentionLevel + 1, currentIndentionLevel};
+            indentationLevels = new int[]{currentIndentionLevel + 1, currentIndentionLevel};
         } else if (line.equals("next")) {
-            indentationLevels =  new int[] {currentIndentionLevel - 1, currentIndentionLevel};
+            indentationLevels = new int[]{currentIndentionLevel - 1, currentIndentionLevel};
         } else if (!insideQuotes && Arrays.stream(STEP_STARTERS).anyMatch(line::startsWith)) {
-            indentationLevels =  new int[] {currentIndentionLevel, currentIndentionLevel};
+            indentationLevels = new int[]{currentIndentionLevel, currentIndentionLevel};
         } else {
-            indentationLevels =  new int[] {currentIndentionLevel, currentIndentionLevel};
+            indentationLevels = new int[]{currentIndentionLevel, currentIndentionLevel};
         }
-
 
         int numberOfOpeningBrackets =
                 line.length() - line.replaceAll("[(\\[]", "").length() + (line.length() - line.replaceAll("\\\\<lbrakk>", "").length()) / "\\<lbrakk>".length();
-        int numberOfClosingBrackets = line.length() - line.replaceAll("[)\\]]", "").length()  + (line.length() - line.replaceAll("\\\\<rbrakk>", "").length()) / "\\<rbrakk>".length();
+        int numberOfClosingBrackets = line.length() - line.replaceAll("[)\\]]", "").length() + (line.length() - line.replaceAll("\\\\<rbrakk>", "").length()) / "\\<rbrakk>".length();
 
         long numberOfQuotesInLine = line.chars().filter(ch -> ch == '"').count();
         if (numberOfQuotesInLine % 2 == 1) {
