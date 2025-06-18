@@ -1,6 +1,6 @@
 # Simple Formatter for Isabelle
 
-This Java script reads all `.thy` files in the project directory and creates a formatted ("clean") version of these files.
+This Java script reads all `.thy` files meant for [Isabelle](https://isabelle.in.tum.de) in the project directory and creates a formatted ("clean") version of these files.
 
 ### Overview of formatting to expect:
 - Add spaces around every operator
