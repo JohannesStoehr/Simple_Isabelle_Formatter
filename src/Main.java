@@ -520,7 +520,8 @@ public class Main {
         for (int i = 0; i < linesToSquash.size(); i++) {
             String lineToSquash = linesToSquash.get(i);
             int indentionLevel = (lineToSquash.length() - lineToSquash.trim().length()) / INDENTION_SIZE;
-            int squashedIndentionLevel = indentionLevels.indexOf(indentionLevel) + baseIndention;
+            int indentationIndex = indentionLevels.indexOf(indentionLevel);
+            int squashedIndentionLevel = (indentationIndex == 0 ? 0 : (indentationIndex + 1)) + baseIndention;
             cleanLines.set(currentIndex + i - linesToSquash.size() + 1, " ".repeat(squashedIndentionLevel * INDENTION_SIZE) + linesToSquash.get(i).trim());
         }
     }
