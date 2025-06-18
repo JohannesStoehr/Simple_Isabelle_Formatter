@@ -18,4 +18,6 @@ This Java script reads all `.thy` files meant for [Isabelle](https://isabelle.in
 - Indent lines (apply-style proofs currently not supported)
 - To be continued
 
+The script is currently limited since it does not build an abstract syntax tree (AST) of the Isabelle files. It only does some basic string manipulation, which limits it to simple formatting tasks. However, it is still useful for cleaning up Isabelle files.
+
 Requires at least Java 21 to run.
