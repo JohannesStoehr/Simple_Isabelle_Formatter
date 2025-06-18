@@ -2,9 +2,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -169,6 +167,7 @@ public class Main {
 
         line = line.replaceAll("\\s,\\s|\\s,|,\\s", ",");
         line = line.replaceAll("\\s\\.\\s|\\s\\.", ". ");
+        line = line.replaceAll("\\s;\\s|\\s;", "; ");
 
         line = line.replaceAll("\\s:\\s|\\s:(?!:)|:(?![\\s:])", ": ");
 
@@ -429,8 +428,9 @@ public class Main {
         boolean insideQuotes = false;
         for (int i = 0; i < cleanLines.size(); i++) {
             String line = cleanLines.get(i);
+            String previousLine = i > 0 ? cleanLines.get(i - 1) : "";
 
-            int[] indentations = handleIndentionLevel(line, currentIndentionLevel, insideQuotes);
+            int[] indentations = handleIndentionLevel(line, previousLine, currentIndentionLevel, insideQuotes);
             line = " ".repeat(indentations[0] * INDENTION_SIZE) + line.trim();
             currentIndentionLevel = indentations[1];
             cleanLines.set(i, line);
@@ -438,11 +438,14 @@ public class Main {
             long numberOfQuotesInLine = line.chars().filter(ch -> ch == '"').count();
             if (numberOfQuotesInLine % 2 == 1) {
                 insideQuotes = !insideQuotes;
+                if (!insideQuotes) {
+                    squashUnnecessaryIndention(cleanLines, i);
+                }
             }
         }
     }
 
-    private static int[] handleIndentionLevel(String line, int currentIndentionLevel, boolean insideQuotes) {
+    private static int[] handleIndentionLevel(String line, String previousLine, int currentIndentionLevel, boolean insideQuotes) {
         int[] indentationLevels;
 
         if (Stream.concat(Arrays.stream(LEMMA_STARTERS), Stream.concat(Arrays.stream(TEXT_STARTERS), Arrays.stream(OTHER_STARTERS))).anyMatch(line::startsWith)) {
@@ -471,8 +474,12 @@ public class Main {
             indentationLevels = new int[]{currentIndentionLevel + 1, currentIndentionLevel};
         } else if (line.equals("next")) {
             indentationLevels = new int[]{currentIndentionLevel - 1, currentIndentionLevel};
+        } else if (previousLine.contains("obtain")) {
+            indentationLevels = new int[]{currentIndentionLevel + 1, currentIndentionLevel};
         } else if (!insideQuotes && Arrays.stream(STEP_STARTERS).anyMatch(line::startsWith)) {
             indentationLevels = new int[]{currentIndentionLevel, currentIndentionLevel};
+        } else if (insideQuotes) {
+            indentationLevels = new int[]{currentIndentionLevel + 1, currentIndentionLevel};
         } else {
             indentationLevels = new int[]{currentIndentionLevel, currentIndentionLevel};
         }
@@ -493,5 +500,28 @@ public class Main {
         indentationLevels[1] += numberOfOpeningBrackets - numberOfClosingBrackets;
 
         return indentationLevels;
+    }
+
+    private static void squashUnnecessaryIndention(List<String> cleanLines, int currentIndex) {
+        List<String> linesToSquash = new ArrayList<>();
+        linesToSquash.add(cleanLines.get(currentIndex));
+        for (int i = currentIndex - 1; i >= 0; i--) {
+            linesToSquash.addFirst(cleanLines.get(i));
+            if (cleanLines.get(i).chars().filter(ch -> ch == '"').count() == 1) {
+                break;
+            }
+        }
+        List<Integer> indentionLevels = linesToSquash.stream()
+                .map(line -> (line.length() - line.trim().length()) / INDENTION_SIZE)
+                .distinct()
+                .sorted()
+                .toList();
+        int baseIndention = indentionLevels.getFirst();
+        for (int i = 0; i < linesToSquash.size(); i++) {
+            String lineToSquash = linesToSquash.get(i);
+            int indentionLevel = (lineToSquash.length() - lineToSquash.trim().length()) / INDENTION_SIZE;
+            int squashedIndentionLevel = indentionLevels.indexOf(indentionLevel) + baseIndention;
+            cleanLines.set(currentIndex + i - linesToSquash.size() + 1, " ".repeat(squashedIndentionLevel * INDENTION_SIZE) + linesToSquash.get(i).trim());
+        }
     }
 }
