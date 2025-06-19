@@ -202,8 +202,11 @@ public class Main {
         for (int i = 1; i < parts.length; i++) {
             if (insideQuotes) {
                 lineBuilder.append(parts[i].trim());
-            } else if (!parts[i].isBlank()) {
-                lineBuilder.append(" ").append(parts[i].trim());
+            } else {
+                lineBuilder.append(" ");
+                if (!parts[i].isBlank()) {
+                    lineBuilder.append(parts[i].trim());
+                }
             }
             insideQuotes = !insideQuotes;
 
