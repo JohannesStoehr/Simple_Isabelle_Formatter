@@ -2,7 +2,9 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -15,8 +17,7 @@ public class Main {
     private static final String[] COMMENT_STARTERS = {"text"};
     private static final String[] TEXT_STARTERS = {"section", "subsection", "subsubsection"};
     private static final String[] LEMMA_STARTERS = {"lemma", "theorem"};
-    private static final String[] OTHER_STARTERS = {"fun", "definition", "function", "datatype", "type_synonym", "theory", "begin", "sledgehammer_params", "abbreviation",
-            "inductive", "locale", "end"};
+    private static final String[] OTHER_STARTERS = {"fun", "definition", "function", "datatype", "type_synonym", "theory", "begin", "sledgehammer_params", "abbreviation", "inductive", "locale", "end"};
     private static final String[] STEP_STARTERS = {"then", "have", "also", "finally", "hence", "thus", "moreover", "case", "show", "obtain"};
     private static final String STEP_STARTERS_REGEX = String.join("|", STEP_STARTERS);
     private static final String[] PROOF_HELPERS = {"using", "unfolding"};
@@ -31,13 +32,15 @@ public class Main {
 
     public static void main(String[] args) throws IOException {
         try (Stream<Path> paths = Files.walk(Path.of("."))) {
-            paths.filter(Files::isRegularFile)
-                    .filter(p -> !p.toString().contains("Clean"))
-                    .filter(path -> path.toString().endsWith(".thy"))
-                    .forEach(Main::processFile);
+            paths.filter(Files::isRegularFile).filter(p -> !p.toString().contains("Clean")).filter(path -> path.toString().endsWith(".thy")).forEach(Main::processFile);
         }
     }
 
+    /**
+     * Processes a single file, cleaning up the formatting according to the specified rules.
+     *
+     * @param path the path to the file to be processed
+     */
     private static void processFile(Path path) {
         File cleanFile = createCleanFile(path);
 
@@ -68,21 +71,14 @@ public class Main {
                 newLines = 0;
             }
 
-            newLines = addEmptyLinesBeforeLemmaOrSection(line, cleanLines, newLines);
+            addEmptyLinesBeforeLemmaOrSection(line, cleanLines);
 
             if (Stream.concat(Arrays.stream(TEXT_STARTERS), Arrays.stream(COMMENT_STARTERS)).anyMatch(line::startsWith)) {
                 cleanLines.add(line);
                 continue;
             }
 
-            line = normalizeSpaces(line, insideQuotes);
-            line = moveLineBreakers(line, cleanLines, lines, i);
-            line = breakLine(line, lines, i + 1);
-            line = removeMultipleProofHelpers(line, cleanLines);
-            line = removeUnnecessaryBrackets(line, lines, i + 1, insideQuotes);
-            line = addAnds(line, lines, i + 1, cleanLines);
-            line = breakLongLines(line, lines, i + 1);
-            line = addApplyAutoBonk(line);
+            line = processLine(line, lines, cleanLines, i, insideQuotes);
 
             if (line.isBlank()) {
                 continue;
@@ -109,6 +105,12 @@ public class Main {
         }
     }
 
+    /**
+     * Creates a clean file for the given path, deleting any existing file with the same name.
+     *
+     * @param path the path to the original file
+     * @return the created clean file
+     */
     private static File createCleanFile(Path path) {
         String cleanFileName = path.toString().replace(".thy", "Clean.thy");
         File cleanFile = new File(cleanFileName);
@@ -127,25 +129,60 @@ public class Main {
         return cleanFile;
     }
 
-    private static int addEmptyLinesBeforeLemmaOrSection(String line, List<String> cleanLines, int newLinesBefore) {
-        if (Stream.concat(Arrays.stream(TEXT_STARTERS), Arrays.stream(LEMMA_STARTERS)).anyMatch(line::startsWith)) {
-            int blankLinesToAdd = LINES_BEFORE_LEMMA_OR_SECTION;
-            for (int i = cleanLines.size() - 1; i >= 0 && i >= cleanLines.size() - LINES_BEFORE_LEMMA_OR_SECTION; i--) {
-                if (cleanLines.get(i).isBlank()) {
-                    blankLinesToAdd--;
-                } else {
-                    break;
-                }
+    /**
+     * Processes a single line of text, applying various formatting rules.
+     *
+     * @param line         the line to be processed
+     * @param lines        the original list of lines
+     * @param cleanLines   the list of cleaned lines to which the processed line will be added
+     * @param currentIndex the index of the current line in the original list
+     * @param insideQuotes whether the start of the current line is inside quotes
+     * @return the processed line
+     */
+    private static String processLine(String line, List<String> lines, List<String> cleanLines, int currentIndex, boolean insideQuotes) {
+        line = normalizeSpaces(line, insideQuotes);
+        line = moveLineBreakers(line, cleanLines, lines, currentIndex);
+        line = breakLine(line, lines, currentIndex + 1);
+        line = removeMultipleProofHelpers(line, cleanLines);
+        line = removeUnnecessaryBrackets(line, lines, currentIndex + 1, insideQuotes);
+        line = addAnds(line, lines, currentIndex + 1, cleanLines);
+        line = breakLongLines(line, lines, currentIndex + 1);
+        line = addApplyAutoBonk(line);
+
+        return line;
+    }
+
+    /**
+     * Adds empty lines before lemmas or sections if necessary according to {@link Main#LINES_BEFORE_LEMMA_OR_SECTION}.
+     *
+     * @param line       the current line being processed
+     * @param cleanLines the list of cleaned lines
+     */
+    private static void addEmptyLinesBeforeLemmaOrSection(String line, List<String> cleanLines) {
+        if (Stream.concat(Arrays.stream(TEXT_STARTERS), Arrays.stream(LEMMA_STARTERS)).noneMatch(line::startsWith)) {
+            return;
+        }
+
+        int blankLinesToAdd = LINES_BEFORE_LEMMA_OR_SECTION;
+        for (int i = cleanLines.size() - 1; i >= 0 && i >= cleanLines.size() - LINES_BEFORE_LEMMA_OR_SECTION; i--) {
+            if (cleanLines.get(i).isBlank()) {
+                blankLinesToAdd--;
+            } else {
+                break;
             }
-            for (int i = 0; i < blankLinesToAdd; i++) {
-                cleanLines.add("");
-            }
-            return LINES_BEFORE_LEMMA_OR_SECTION;
-        } else {
-            return newLinesBefore;
+        }
+        for (int i = 0; i < blankLinesToAdd; i++) {
+            cleanLines.add("");
         }
     }
 
+    /**
+     * Normalizes spaces in a line according to various rules, including handling operators, brackets, and quotation marks.
+     *
+     * @param line         the line to be normalized
+     * @param insideQuotes whether the start of the current line is inside quotes
+     * @return the normalized line
+     */
     private static String normalizeSpaces(String line, boolean insideQuotes) {
         line = normalizeQuotationSpaces(line, insideQuotes);
 
@@ -183,6 +220,13 @@ public class Main {
         return line.trim();
     }
 
+    /**
+     * Normalizes spaces around quotation marks in a line, ensuring proper spacing inside and directly next to quotes.
+     *
+     * @param line         the line to be normalized
+     * @param insideQuotes whether the start of the current line is inside quotes
+     * @return the normalized line with proper quotation spacing
+     */
     private static String normalizeQuotationSpaces(String line, boolean insideQuotes) {
         String[] parts = line.split("\"", -1);
 
@@ -217,6 +261,15 @@ public class Main {
         return lineBuilder.toString();
     }
 
+    /**
+     * Moves line breakers {@link Main#LINE_STARTERS}, {@link Main#LINE_ENDERS} and "and" to the previous line or the next line as appropriate.
+     *
+     * @param line         the current line being processed
+     * @param cleanLines   the list of cleaned lines
+     * @param lines        the original list of lines
+     * @param currentIndex the index of the current line in the original list
+     * @return the modified line after moving line breakers
+     */
     private static String moveLineBreakers(String line, List<String> cleanLines, List<String> lines, int currentIndex) {
         for (String lineEnder : LINE_ENDERS) {
             if (line.matches(lineEnder + "([\\s()\"].*)?")) {
@@ -244,6 +297,14 @@ public class Main {
         }
     }
 
+    /**
+     * Breaks a line into multiple lines based on various conditions, such as {@link Main#LINE_STARTERS}, {@link Main#LINE_ENDERS}, {@link Main#PROOF_HELPERS} and other keywords.
+     *
+     * @param line       the current line being processed
+     * @param lines      the original list of lines
+     * @param indexToAdd the index at which to add new lines that were broken up
+     * @return the modified line after breaking it up
+     */
     private static String breakLine(String line, List<String> lines, int indexToAdd) {
         for (String lineEnder : LINE_ENDERS) {
             if (line.matches(".*[\\s)]" + lineEnder + "[\\s()].*")) {
@@ -336,6 +397,13 @@ public class Main {
         }
     }
 
+    /**
+     * Removes multiple occurrences of {@link Main#PROOF_HELPERS} from a line, ensuring that only one instance remains at the start of the line.
+     *
+     * @param line       the current line being processed
+     * @param cleanLines the list of cleaned lines
+     * @return the modified line after removing multiple proof helpers
+     */
     private static String removeMultipleProofHelpers(String line, List<String> cleanLines) {
         for (String proofHelper : PROOF_HELPERS) {
             if (line.indexOf(proofHelper) != line.lastIndexOf(proofHelper)) {
@@ -357,6 +425,15 @@ public class Main {
         return line;
     }
 
+    /**
+     * Removes unnecessary brackets around single terms and around entire quoted strings
+     *
+     * @param line         the current line being processed
+     * @param lines        the original list of lines
+     * @param nextIndex    the index of the next line to be processed
+     * @param insideQuotes whether the start of the current line is inside quotes
+     * @return the modified line after removing unnecessary brackets
+     */
     private static String removeUnnecessaryBrackets(String line, List<String> lines, int nextIndex, boolean insideQuotes) {
         line = line.replaceAll("\\(" + PROOVERS_REGEX + "([^\\s()',[0-9]]+)\\)", "$1");
 
@@ -412,6 +489,15 @@ public class Main {
         return line;
     }
 
+    /**
+     * Adds "and" to lines that start with "assumes", "shows", or "fixes" and splits them into multiple lines if necessary.
+     *
+     * @param line       the current line being processed
+     * @param lines      the original list of lines
+     * @param indexToAdd the index at which to add new lines that were split
+     * @param cleanLines the list of cleaned lines to which the processed line will be added
+     * @return the modified line after adding "and" where appropriate
+     */
     private static String addAnds(String line, List<String> lines, int indexToAdd, List<String> cleanLines) {
         if (line.startsWith("assumes") || line.startsWith("shows") || line.startsWith("fixes")) {
             String[] parts = line.split("\"\\s\"|\"\"");
@@ -433,6 +519,14 @@ public class Main {
         }
     }
 
+    /**
+     * Breaks long lines that start with {@link Main#PROOF_HELPERS} into multiple lines if they exceed {@link Main#MAX_LINE_LENGTH}.
+     *
+     * @param line       the current line being processed
+     * @param lines      the original list of lines
+     * @param indexToAdd the index at which to add new lines that were split
+     * @return the modified line after breaking it up if necessary
+     */
     private static String breakLongLines(String line, List<String> lines, int indexToAdd) {
         for (String proofHelper : PROOF_HELPERS) {
             if (line.startsWith(proofHelper) && line.length() > MAX_LINE_LENGTH) {
@@ -461,6 +555,13 @@ public class Main {
         return line;
     }
 
+    /**
+     * Adds a warning to lines that contain apply the auto solver since it may change in future Isabelle versions and therefore also change the remaining subgoals which breaks
+     * the proof
+     *
+     * @param line the current line being processed
+     * @return the modified line after adding the warning if necessary
+     */
     private static String addApplyAutoBonk(String line) {
         if ((line.contains("apply auto") || line.contains("apply (auto")) && !line.contains("TODO")) {
             return line + " text \\<open> TODO: Fix! \\<close>";
@@ -468,6 +569,13 @@ public class Main {
         return line;
     }
 
+    /**
+     * Determines whether the current line should be united with the last line in the cleaned lines list.
+     *
+     * @param line       the current line being processed
+     * @param cleanLines the list of cleaned lines
+     * @return true if the current line should be united with the last line, false otherwise
+     */
     private static boolean shouldUniteWithLastLine(String line, List<String> cleanLines) {
         if (cleanLines.isEmpty()) {
             return false;
@@ -477,6 +585,11 @@ public class Main {
         return line.contains("proof") && lastLine.contains("show ");
     }
 
+    /**
+     * Indents the lines in the cleaned lines list according to the specified rules, adjusting the indentation level based on various conditions.
+     *
+     * @param cleanLines the list of cleaned lines to be indented
+     */
     private static void indentLines(List<String> cleanLines) {
         int currentIndentionLevel = 0;
         boolean insideQuotes = false;
@@ -499,6 +612,15 @@ public class Main {
         }
     }
 
+    /**
+     * Handles the indentation level for a given line based on its content and the previous line.
+     *
+     * @param line                  the current line being processed
+     * @param previousLine          the previous line in the cleaned lines list
+     * @param currentIndentionLevel the current indentation level
+     * @param insideQuotes          whether the start of the current line is inside quotes
+     * @return an array containing the new indentation level and the adjusted indentation level for the next lines
+     */
     private static int[] handleIndentionLevel(String line, String previousLine, int currentIndentionLevel, boolean insideQuotes) {
         int[] indentationLevels;
 
@@ -538,8 +660,7 @@ public class Main {
             indentationLevels = new int[]{currentIndentionLevel, currentIndentionLevel};
         }
 
-        int numberOfOpeningBrackets =
-                line.length() - line.replaceAll("[(\\[]", "").length() + (line.length() - line.replaceAll("\\\\<lbrakk>", "").length()) / "\\<lbrakk>".length();
+        int numberOfOpeningBrackets = line.length() - line.replaceAll("[(\\[]", "").length() + (line.length() - line.replaceAll("\\\\<lbrakk>", "").length()) / "\\<lbrakk>".length();
         int numberOfClosingBrackets = line.length() - line.replaceAll("[)\\]]", "").length() + (line.length() - line.replaceAll("\\\\<rbrakk>", "").length()) / "\\<rbrakk>".length();
 
         long numberOfQuotesInLine = line.chars().filter(ch -> ch == '"').count();
@@ -556,6 +677,12 @@ public class Main {
         return indentationLevels;
     }
 
+    /**
+     * Squashes unnecessary indentation for lines that are part of a single quoted string, ensuring that indentations are not unnecessarily deepened.
+     *
+     * @param cleanLines   the list of cleaned lines to be adjusted
+     * @param currentIndex the index of the current line in the cleaned lines list
+     */
     private static void squashUnnecessaryIndention(List<String> cleanLines, int currentIndex) {
         List<String> linesToSquash = new ArrayList<>();
         linesToSquash.add(cleanLines.get(currentIndex));
@@ -565,11 +692,7 @@ public class Main {
                 break;
             }
         }
-        List<Integer> indentionLevels = linesToSquash.stream()
-                .map(line -> (line.length() - line.trim().length()) / INDENTION_SIZE)
-                .distinct()
-                .sorted()
-                .toList();
+        List<Integer> indentionLevels = linesToSquash.stream().map(line -> (line.length() - line.trim().length()) / INDENTION_SIZE).distinct().sorted().toList();
         int baseIndention = indentionLevels.getFirst();
         for (int i = 0; i < linesToSquash.size(); i++) {
             String lineToSquash = linesToSquash.get(i);
