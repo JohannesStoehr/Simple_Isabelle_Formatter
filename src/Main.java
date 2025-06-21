@@ -79,7 +79,7 @@ public class Main {
             line = moveLineBreakers(line, cleanLines, lines, i);
             line = breakLine(line, lines, i + 1);
             line = removeMultipleProofHelpers(line, cleanLines);
-            line = removeUnnecessaryBrackets(line);
+            line = removeUnnecessaryBrackets(line, lines, i + 1, insideQuotes);
             line = addAnds(line, lines, i + 1, cleanLines);
             line = breakLongLines(line, lines, i + 1);
             line = addApplyAutoBonk(line);
@@ -357,8 +357,59 @@ public class Main {
         return line;
     }
 
-    private static String removeUnnecessaryBrackets(String line) {
-        return line.replaceAll("\\(" + PROOVERS_REGEX + "([^\\s()',[0-9]]+)\\)", "$1");
+    private static String removeUnnecessaryBrackets(String line, List<String> lines, int nextIndex, boolean insideQuotes) {
+        line = line.replaceAll("\\(" + PROOVERS_REGEX + "([^\\s()',[0-9]]+)\\)", "$1");
+
+        if (insideQuotes || !line.contains("\"")) {
+            return line;
+        }
+
+        int i = line.indexOf('"') + 1;
+        int bracketCount = 0;
+        String currentLine = line;
+        boolean mutliLine = false;
+        boolean foundBrackets = false;
+
+        do {
+            while (i > currentLine.length() - 1) {
+                currentLine = lines.get(nextIndex);
+                nextIndex++;
+                i = 0;
+                mutliLine = true;
+            }
+            char currentChar = currentLine.charAt(i);
+            if (currentChar == '(') {
+                bracketCount++;
+                foundBrackets = true;
+            } else if (currentChar == ')') {
+                bracketCount--;
+            } else if (currentChar == ',' && bracketCount == 1) {
+                return line;
+            }
+            i++;
+        } while (bracketCount > 0);
+
+        if (!foundBrackets) {
+            return line;
+        }
+
+        if ((i >= currentLine.length() && lines.get(nextIndex).startsWith("\"")) || (i < currentLine.length() && currentLine.charAt(i) == '\"')) {
+            if (mutliLine) {
+                if (i >= currentLine.length() && lines.get(nextIndex).startsWith("\"")) {
+                    currentLine = currentLine.substring(0, i - 1);
+                } else {
+                    currentLine = currentLine.substring(0, i - 1) + currentLine.substring(i);
+                }
+                lines.set(nextIndex - 1, currentLine);
+            } else {
+                line = line.substring(0, i - 1) + line.substring(i);
+            }
+
+            int firstQuoteIndex = line.indexOf('"');
+            line = line.substring(0, firstQuoteIndex + 1) + line.substring(firstQuoteIndex + 2);
+        }
+
+        return line;
     }
 
     private static String addAnds(String line, List<String> lines, int indexToAdd, List<String> cleanLines) {
