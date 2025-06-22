@@ -23,12 +23,14 @@ public class Main {
     private static final String[] PROOF_HELPERS = {"using", "unfolding"};
     private static final String[] OPERATORS = {"\\+", "\\-", "\\*", "div", "=", "::", "`", "@", "#", "\\|", "\\\\<[a-zA-Z]*>"};
     private static final String OPERATOR_REGEX = "(" + String.join("|", OPERATORS) + ")";
-    private static final String[] PROOVERS = {"verit", "full_types"};
-    private static final String PROOVERS_REGEX = "(?!" + String.join("\\b)(?!", PROOVERS) + "\\b)";
+    private static final String[] PROVERS = {"verit", "full_types"};
+    private static final String PROVERS_REGEX = "(?!" + String.join("\\b)(?!", PROVERS) + "\\b)";
     private static final String[] LINE_ENDERS = {"of", "where", "\\|"};
     private static final String[] LINE_STARTERS = {"then", "else"};
     private static final String[] OPENING_BRACKETS = {"\\(", "\\{", "\\\\<lbrakk>"};
     private static final String[] CLOSING_BRACKETS = {"\\)", "\\}", "\\\\<rbrakk>"};
+    private static final String[] SOLVER_HELPERS = {"sledgehammer", "nitpick", "quickcheck", "try0", "try"};
+    private static final String SOLVER_HELPERS_REGEX = "(" + String.join("|", SOLVER_HELPERS) + ")";
 
     public static void main(String[] args) throws IOException {
         try (Stream<Path> paths = Files.walk(Path.of("."))) {
@@ -148,6 +150,7 @@ public class Main {
         line = addAnds(line, lines, currentIndex + 1, cleanLines);
         line = breakLongLines(line, lines, currentIndex + 1);
         line = addApplyAutoBonk(line);
+        line = removeSolverHelpers(line);
 
         return line;
     }
@@ -435,7 +438,7 @@ public class Main {
      * @return the modified line after removing unnecessary brackets
      */
     private static String removeUnnecessaryBrackets(String line, List<String> lines, int nextIndex, boolean insideQuotes) {
-        line = line.replaceAll("\\(" + PROOVERS_REGEX + "([^\\s()',[0-9]]+)\\)", "$1");
+        line = line.replaceAll("\\(" + PROVERS_REGEX + "([^\\s()',[0-9]]+)\\)", "$1");
 
         if (insideQuotes || !line.contains("\"")) {
             return line;
@@ -570,6 +573,16 @@ public class Main {
     }
 
     /**
+     * Removes the {@link Main#SOLVER_HELPERS} from lines, as they should not be inside finished proofs.
+     *
+     * @param line the current line being processed
+     * @return the modified line after removing the solver helpers
+     */
+    private static String removeSolverHelpers(String line) {
+        return line.replaceAll("(?<=^|[\\s)\\]])" + SOLVER_HELPERS_REGEX + "(?=\\s\\(\\[|$)", "");
+    }
+
+    /**
      * Determines whether the current line should be united with the last line in the cleaned lines list.
      *
      * @param line       the current line being processed
@@ -587,6 +600,7 @@ public class Main {
 
     /**
      * Indents the lines in the cleaned lines list according to the specified rules, adjusting the indentation level based on various conditions.
+     * The number of spaces for indentation is defined by {@link Main#INDENTION_SIZE}.
      *
      * @param cleanLines the list of cleaned lines to be indented
      */
