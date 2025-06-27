@@ -395,6 +395,10 @@ public class Main {
                 lines.add(indexToAdd, parts[1].trim());
             }
             return parts[0].trim() + " and";
+        } else if (line.matches("[^\\[]*\"\\s?\"[^]]*")) {
+            String[] parts = line.split("\"\\s?\"", 2);
+            lines.add(indexToAdd, "\"" + parts[1].trim());
+            return parts[0].trim() + "\" and";
         } else {
             return line;
         }
