@@ -16,6 +16,7 @@ This Java script reads all `.thy` files meant for [Isabelle](https://isabelle.in
 - Add a reminder that `apply auto` is usually bad style (see: https://proofcraft.org/blog/isabelle-style.html)
 - Add empty lines before proofs
 - Cap the amount of empty lines
+- Removes left over helpers for your proofs like sledgehammer or try0
 - Indent lines (apply-style proofs currently not supported)
 - To be continued
 
