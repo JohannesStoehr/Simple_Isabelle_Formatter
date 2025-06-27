@@ -18,7 +18,7 @@ public class Main {
     private static final String[] TEXT_STARTERS = {"section", "subsection", "subsubsection"};
     private static final String[] LEMMA_STARTERS = {"lemma", "theorem"};
     private static final String[] OTHER_STARTERS = {"fun", "definition", "function", "datatype", "type_synonym", "theory", "begin", "sledgehammer_params", "abbreviation", "inductive", "locale", "end"};
-    private static final String[] STEP_STARTERS = {"then", "have", "also", "finally", "hence", "thus", "moreover", "case", "show", "obtain"};
+    private static final String[] STEP_STARTERS = {"then", "have", "also", "finally", "hence", "thus", "moreover", "case", "show", "obtain", "assume"};
     private static final String STEP_STARTERS_REGEX = String.join("|", STEP_STARTERS);
     private static final String[] PROOF_HELPERS = {"using", "unfolding"};
     private static final String[] OPERATORS = {"\\+", "\\-", "\\*", "div", "=", "::", "`", "@", "#", "\\|", "\\\\<[a-zA-Z]*>"};
@@ -651,7 +651,7 @@ public class Main {
                 indentationLevels = new int[]{1, 1};
             }
         } else if (line.contains("proof")) {
-            if (line.contains("show")) {
+            if (line.contains("show") || line.contains("have") || insideQuotes) {
                 indentationLevels = new int[]{currentIndentionLevel, currentIndentionLevel + 1};
             } else {
                 indentationLevels = new int[]{0, 1};
