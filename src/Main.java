@@ -14,6 +14,7 @@ public class Main {
     private static final int MAX_NEW_LINES = 2;
     private static final int LINES_BEFORE_LEMMA_OR_SECTION = 2;
     private static final int MAX_LINE_LENGTH = 100;
+
     private static final String[] COMMENT_STARTERS = {"text"};
     private static final String[] TEXT_STARTERS = {"section", "subsection", "subsubsection"};
     private static final String[] LEMMA_STARTERS = {"lemma", "theorem"};
@@ -34,7 +35,16 @@ public class Main {
 
     public static void main(String[] args) throws IOException {
         try (Stream<Path> paths = Files.walk(Path.of("."))) {
-            paths.filter(Files::isRegularFile).filter(p -> !p.toString().contains("Clean")).filter(path -> path.toString().endsWith(".thy")).forEach(Main::processFile);
+            paths.filter(Files::isRegularFile)
+                    .filter(p -> !p.toString().contains("Clean"))
+                    .filter(p -> p.toString().endsWith(".thy"))
+                    .forEach(p -> {
+                        try {
+                            processFile(p);
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                    });
         }
     }
 
@@ -43,16 +53,11 @@ public class Main {
      *
      * @param path the path to the file to be processed
      */
-    private static void processFile(Path path) {
+    private static void processFile(Path path) throws IOException {
         File cleanFile = createCleanFile(path);
 
-        List<String> lines;
+        List<String> lines =  new ArrayList<>(Files.readAllLines(path));
         List<String> cleanLines = new ArrayList<>();
-        try {
-            lines = new ArrayList<>(Files.readAllLines(path));
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
 
         int newLines = 2;
         boolean insideQuotes = false;
@@ -100,11 +105,7 @@ public class Main {
 
         indentLines(cleanLines);
 
-        try {
-            Files.write(cleanFile.toPath(), cleanLines);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        Files.write(cleanFile.toPath(), cleanLines);
     }
 
     /**
@@ -113,20 +114,14 @@ public class Main {
      * @param path the path to the original file
      * @return the created clean file
      */
-    private static File createCleanFile(Path path) {
+    private static File createCleanFile(Path path) throws IOException {
         String cleanFileName = path.toString().replace(".thy", "Clean.thy");
         File cleanFile = new File(cleanFileName);
-        if (cleanFile.exists()) {
-            if (!cleanFile.delete()) {
-                throw new RuntimeException("Could not delete existing clean file: " + cleanFileName);
-            }
+        if (cleanFile.exists() && !cleanFile.delete()) {
+            throw new RuntimeException("Could not delete existing clean file: " + cleanFileName);
         }
-        try {
-            if (!cleanFile.createNewFile()) {
-                throw new RuntimeException("Could not create clean file: " + cleanFileName);
-            }
-        } catch (IOException e) {
-            throw new RuntimeException("Could not create clean file: " + cleanFileName, e);
+        if (!cleanFile.createNewFile()) {
+            throw new RuntimeException("Could not create clean file: " + cleanFileName);
         }
         return cleanFile;
     }
@@ -444,6 +439,19 @@ public class Main {
     private static String removeUnnecessaryBrackets(String line, List<String> lines, int nextIndex, boolean insideQuotes) {
         line = line.replaceAll("\\(" + PROVERS_REGEX + "([^\\s()',[0-9]]+)\\)", "$1");
 
+        return removeUnnecessaryBracketsAroundCompleteString(line, lines, nextIndex, insideQuotes);
+    }
+
+    /**
+     * Removes unnecessary brackets around the complete content of strings.
+     *
+     * @param line         the current line being processed
+     * @param lines        the original list of lines
+     * @param nextIndex    the index of the next line to be processed
+     * @param insideQuotes whether the start of the current line is inside quotes
+     * @return the modified line after removing unnecessary brackets
+     */
+    private static String removeUnnecessaryBracketsAroundCompleteString(String line, List<String> lines, int nextIndex, boolean insideQuotes) {
         if (insideQuotes || !line.contains("\"")) {
             return line;
         }
@@ -710,6 +718,7 @@ public class Main {
                 break;
             }
         }
+
         List<Integer> indentionLevels = linesToSquash.stream().map(line -> (line.length() - line.trim().length()) / INDENTION_SIZE).distinct().sorted().toList();
         int baseIndention = indentionLevels.getFirst();
         for (int i = 0; i < linesToSquash.size(); i++) {
