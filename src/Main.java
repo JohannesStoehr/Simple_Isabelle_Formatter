@@ -176,20 +176,34 @@ public class Main {
         }
     }
 
+    /**
+     * Handles comments in the proof, which can span multiple lines. It processes the comment line by line until it finds the closing tag.
+     *
+     * @param index      the current index in the list of lines
+     * @param lines      the original list of lines
+     * @param cleanLines the list of cleaned lines to which the processed comment will be added
+     * @return the updated line index after processing the comment
+     */
     private static int handleComment(int index, List<String> lines, List<String> cleanLines) {
         String line = lines.get(index).trim();
         String lineStarter = Stream.concat(Arrays.stream(TEXT_STARTERS), Stream.of(COMMENT_STARTER)).filter(line::startsWith).findFirst().orElse("");
         line = line.replaceAll(lineStarter + "(?!\\s)", lineStarter + " ");
+
+        int openNumber = 0;
+        openNumber += line.split("\\\\<open>", -1).length - 1;
+        openNumber -= line.split("\\\\<close>", -1).length - 1;
+
         boolean wasQuoted = line.charAt(lineStarter.length() + 1) == '"';
         if (wasQuoted) {
             line = line.substring(0, lineStarter.length() + 1) + "\\<open>" + line.substring(lineStarter.length() + 2);
         }
-
         String expectedLineEnder = wasQuoted ? "\"" : "\\<close>";
-        while (!line.endsWith(expectedLineEnder)) {
+        while (!line.endsWith(expectedLineEnder) || openNumber > 0) {
             cleanLines.add(line);
             index++;
-            line = lines.get(index).stripTrailing();
+            line = lines.get(index).strip();
+            openNumber += line.split("\\\\<open>", -1).length - 1;
+            openNumber -= line.split("\\\\<close>", -1).length - 1;
         }
 
         if (wasQuoted) {
@@ -698,7 +712,7 @@ public class Main {
             indentationLevels = new int[]{1, 0};
         } else if (line.equals("qed")) {
             indentationLevels = new int[]{currentIndentionLevel - 1, currentIndentionLevel - 1};
-        } else if (line.startsWith("by") || line.startsWith("apply") || Arrays.stream(PROOF_HELPERS).anyMatch(line::startsWith)) {
+        } else if (line.startsWith("by") || line.startsWith("apply") || Arrays.stream(PROOF_HELPERS).anyMatch(line::startsWith) || line.equals("sorry")) {
             indentationLevels = new int[]{currentIndentionLevel + 1, currentIndentionLevel};
         } else if (line.equals("next")) {
             indentationLevels = new int[]{currentIndentionLevel - 1, currentIndentionLevel};
@@ -708,12 +722,18 @@ public class Main {
             indentationLevels = new int[]{currentIndentionLevel, currentIndentionLevel};
         } else if (insideQuotes) {
             indentationLevels = new int[]{currentIndentionLevel + 1, currentIndentionLevel};
+        } else if (line.equals("\\<close>")) {
+            indentationLevels = new int[]{currentIndentionLevel - 1, currentIndentionLevel};
         } else {
             indentationLevels = new int[]{currentIndentionLevel, currentIndentionLevel};
         }
 
-        int numberOfOpeningBrackets = line.length() - line.replaceAll("[(\\[]", "").length() + (line.length() - line.replaceAll("\\\\<lbrakk>", "").length()) / "\\<lbrakk>".length();
-        int numberOfClosingBrackets = line.length() - line.replaceAll("[)\\]]", "").length() + (line.length() - line.replaceAll("\\\\<rbrakk>", "").length()) / "\\<rbrakk>".length();
+        int numberOfOpeningBrackets = line.length() - line.replaceAll("[(\\[]", "").length() +
+                (line.length() - line.replaceAll("\\\\<lbrakk>", "").length()) / "\\<lbrakk>".length() +
+                (line.length() - line.replaceAll("\\\\<open>", "").length()) / "\\<open>".length();
+        int numberOfClosingBrackets = line.length() - line.replaceAll("[)\\]]", "").length() +
+                (line.length() - line.replaceAll("\\\\<rbrakk>", "").length()) / "\\<rbrakk>".length() +
+                (line.length() - line.replaceAll("\\\\<close>", "").length()) / "\\<close>".length();
 
         long numberOfQuotesInLine = line.chars().filter(ch -> ch == '"').count();
         if (numberOfQuotesInLine % 2 == 1) {
