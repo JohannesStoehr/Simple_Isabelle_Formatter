@@ -81,7 +81,7 @@ public class Main {
             addEmptyLinesBeforeLemmaOrSection(line, cleanLines);
 
             if (Stream.concat(Arrays.stream(TEXT_STARTERS), Stream.of(COMMENT_STARTER)).anyMatch(line::startsWith)) {
-                cleanLines.add(line);
+                i = handleComment(i, lines, cleanLines);
                 continue;
             }
 
@@ -174,6 +174,30 @@ public class Main {
         for (int i = 0; i < blankLinesToAdd; i++) {
             cleanLines.add("");
         }
+    }
+
+    private static int handleComment(int index, List<String> lines, List<String> cleanLines) {
+        String line = lines.get(index).trim();
+        String lineStarter = Stream.concat(Arrays.stream(TEXT_STARTERS), Stream.of(COMMENT_STARTER)).filter(line::startsWith).findFirst().orElse("");
+        line = line.replaceAll(lineStarter + "(?!\\s)", lineStarter + " ");
+        boolean wasQuoted = line.charAt(lineStarter.length() + 1) == '"';
+        if (wasQuoted) {
+            line = line.substring(0, lineStarter.length() + 1) + "\\<open>" + line.substring(lineStarter.length() + 2);
+        }
+
+        String expectedLineEnder = wasQuoted ? "\"" : "\\<close>";
+        while (!line.endsWith(expectedLineEnder)) {
+            cleanLines.add(line);
+            index++;
+            line = lines.get(index).stripTrailing();
+        }
+
+        if (wasQuoted) {
+            line = line.substring(0, line.length() - 1) + "\\<close>";
+        }
+        cleanLines.add(line);
+
+        return index;
     }
 
     /**
