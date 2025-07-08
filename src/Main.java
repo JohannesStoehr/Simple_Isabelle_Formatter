@@ -15,7 +15,7 @@ public class Main {
     private static final int LINES_BEFORE_LEMMA_OR_SECTION = 2;
     private static final int MAX_LINE_LENGTH = 100;
 
-    private static final String[] COMMENT_STARTERS = {"text"};
+    private static final String COMMENT_STARTER = "text";
     private static final String[] TEXT_STARTERS = {"section", "subsection", "subsubsection"};
     private static final String[] LEMMA_STARTERS = {"lemma", "theorem"};
     private static final String[] OTHER_STARTERS = {"fun", "definition", "function", "datatype", "type_synonym", "theory", "begin", "sledgehammer_params", "abbreviation", "inductive", "locale", "end"};
@@ -80,7 +80,7 @@ public class Main {
 
             addEmptyLinesBeforeLemmaOrSection(line, cleanLines);
 
-            if (Stream.concat(Arrays.stream(TEXT_STARTERS), Arrays.stream(COMMENT_STARTERS)).anyMatch(line::startsWith)) {
+            if (Stream.concat(Arrays.stream(TEXT_STARTERS), Stream.of(COMMENT_STARTER)).anyMatch(line::startsWith)) {
                 cleanLines.add(line);
                 continue;
             }
@@ -163,7 +163,9 @@ public class Main {
 
         int blankLinesToAdd = LINES_BEFORE_LEMMA_OR_SECTION;
         for (int i = cleanLines.size() - 1; i >= 0 && i >= cleanLines.size() - LINES_BEFORE_LEMMA_OR_SECTION; i--) {
-            if (cleanLines.get(i).isBlank()) {
+            if (cleanLines.get(i).startsWith(COMMENT_STARTER)) {
+                return;
+            } else if (cleanLines.get(i).isBlank()) {
                 blankLinesToAdd--;
             } else {
                 break;
@@ -652,7 +654,7 @@ public class Main {
 
         if (Stream.concat(Arrays.stream(LEMMA_STARTERS), Stream.concat(Arrays.stream(TEXT_STARTERS), Arrays.stream(OTHER_STARTERS))).anyMatch(line::startsWith)) {
             indentationLevels = new int[]{0, 0};
-        } else if (Arrays.stream(COMMENT_STARTERS).anyMatch(line::startsWith)) {
+        } else if (line.startsWith(COMMENT_STARTER)) {
             indentationLevels = new int[]{currentIndentionLevel, currentIndentionLevel};
         } else if (line.isBlank()) {
             indentationLevels = new int[]{0, currentIndentionLevel};
